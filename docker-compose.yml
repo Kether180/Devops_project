@@ -1,0 +1,100 @@
+version: '3.0'
+
+networks:
+  elk:
+    driver: bridge
+
+volumes:
+  elk_elasticsearch_data:
+
+services:
+  db:
+     image: postgres:14.1-alpine
+     environment:
+       POSTGRES_USER: dbuser
+       POSTGRES_PASSWORD: dbuserpassword
+     ports:
+      - "5432:5432"
+     volumes:
+      - ./local-volumes/database-data:/var/lib/postgresql/data # To run locally uncomment this
+      # - /mnt/volumedb/data:/var/lib/postgresql/data # To run on server uncomment this
+     restart: always
+
+     depends_on:
+     - grafana
+     - prometheus
+
+  api:
+    image: itudevopsgroupo/minitwit-backend:runtime
+    build:
+      context: ./minitwit-backend
+    depends_on:
+    - db
+    - grafana
+    - prometheus
+    ports:
+    - "5050:5050"
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    volumes:
+      - ./remote_files/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:4.5.2
+    volumes:
+    #  - /mnt/volumedb/grafana-datasources:/etc/grafana/provisioning/datasources # To run on server uncomment this
+      - ./local-volumes/grafana-datasources:/etc/grafana/provisioning/datasources # To run locally uncomment this
+    #  - /mnt/volumedb/grafana-data:/var/lib/grafana # To run on server uncomment this
+      - ./local-volumes/grafana-data:/var/lib/grafana # To run locally uncomment this
+    ports:
+      - "3000:3000"
+
+  elasticsearch:
+    image: "docker.elastic.co/elasticsearch/elasticsearch:7.2.0"
+    environment:
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - "discovery.type=single-node"
+    volumes:
+      - elk_elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - elk
+
+  kibana:
+    image: "docker.elastic.co/kibana/kibana:7.2.0"
+    depends_on:
+      - elasticsearch
+    environment:
+      - ELASTICSEARCH_URL=http://localhost:9200
+    networks:
+      - elk
+
+  filebeat:
+    image: "docker.elastic.co/beats/filebeat:7.2.0"
+    user: root
+    volumes:
+        - ${ELK_DIR}/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+        - /var/lib/docker:/var/lib/docker:ro
+        - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+        - elk
+
+  nginx:
+    image: nginx
+    ports:
+      - 9200:9200
+      - 5601:5601
+      - 8881:8881
+      - 8882:8882
+    networks:
+      - elk
+    volumes:
+      - type: bind
+        source: ${ELK_DIR}/nginx.conf
+        target: /etc/nginx/nginx.conf
+      - type: bind
+        source: ${ELK_DIR}/.htpasswd
+        target: /etc/nginx/.htpasswd

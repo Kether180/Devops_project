@@ -1,0 +1,10 @@
+The endpoints for the simulator is as follows:
+
+ GET /latest
+ POST /register
+ GET /msgs
+ GET /msgs/<username>
+ POST /msgs/<username>
+ GET /fllws/<username>
+ POST /fllws/<username>
+code in python describing how the simulator works: https://github.com/itu-devops/lecture_notes/blob/master/sessions/session_03/API_Spec/minitwit_sim_api.py
